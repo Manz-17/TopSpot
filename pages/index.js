@@ -1,21 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Head from 'next/head';
 
 const initialState = {
   games: [
-    { id: 1, icon: '🕹️', name: 'Neon Drift', bid: 420 },
-    { id: 2, icon: '⚔️', name: 'Shadowmere', bid: 180 },
-    { id: 3, icon: '🧩', name: 'Puzzle Loop', bid: 40 },
+    { id: 1, icon: '🕹️', name: 'Neon Drift', bid: 420, ownerId: 'seed' },
+    { id: 2, icon: '⚔️', name: 'Shadowmere', bid: 180, ownerId: 'seed' },
+    { id: 3, icon: '🧩', name: 'Puzzle Loop', bid: 40, ownerId: 'seed' },
   ],
   videos: [
-    { id: 4, icon: '📹', name: 'How I Built This in a Week', bid: 300 },
-    { id: 5, icon: '🎬', name: 'Ranking Every Boss Fight', bid: 95 },
+    { id: 4, icon: '📹', name: 'How I Built This in a Week', bid: 300, ownerId: 'seed' },
+    { id: 5, icon: '🎬', name: 'Ranking Every Boss Fight', bid: 95, ownerId: 'seed' },
   ],
 };
 
 export default function Home() {
   const [state, setState] = useState(initialState);
   const [nextId, setNextId] = useState(6);
+  const [myId, setMyId] = useState(null);
+
+  useEffect(() => {
+    let id = window.localStorage.getItem('topspot_owner_id');
+    if (!id) {
+      id = 'user_' + Math.random().toString(36).slice(2, 10);
+      window.localStorage.setItem('topspot_owner_id', id);
+    }
+    setMyId(id);
+  }, []);
   const [addModal, setAddModal] = useState(null); // 'games' | 'videos' | null
   const [bidModal, setBidModal] = useState(null); // { cat, id } | null
   const [addIcon, setAddIcon] = useState('');
@@ -39,7 +49,7 @@ export default function Home() {
     const icon = addIcon.trim() || '⭐';
     setState(prev => ({
       ...prev,
-      [addModal]: [...prev[addModal], { id: nextId, icon, name, bid }],
+      [addModal]: [...prev[addModal], { id: nextId, icon, name, bid, ownerId: myId }],
     }));
     setNextId(nextId + 1);
     setAddModal(null);
@@ -91,6 +101,7 @@ export default function Home() {
             className="games"
             items={sorted('games')}
             catLabel="Game"
+            myId={myId}
             onAdd={() => setAddModal('games')}
             onBid={(id) => setBidModal({ cat: 'games', id })}
           />
@@ -99,6 +110,7 @@ export default function Home() {
             className="videos"
             items={sorted('videos')}
             catLabel="Video"
+            myId={myId}
             onAdd={() => setAddModal('videos')}
             onBid={(id) => setBidModal({ cat: 'videos', id })}
           />
@@ -154,7 +166,7 @@ export default function Home() {
   );
 }
 
-function Board({ title, className, items, catLabel, onAdd, onBid }) {
+function Board({ title, className, items, catLabel, myId, onAdd, onBid }) {
   return (
     <div className="board">
       <div className={`board-head ${className}`}>
@@ -172,7 +184,9 @@ function Board({ title, className, items, catLabel, onAdd, onBid }) {
               <div className="sub">{catLabel}</div>
             </div>
             <div className="bid-amt">${item.bid.toLocaleString()}</div>
-            <button className="bid-btn" onClick={() => onBid(item.id)}>Bid</button>
+            {item.ownerId === myId && (
+              <button className="bid-btn" onClick={() => onBid(item.id)}>Bid</button>
+            )}
           </li>
         ))}
       </ul>
