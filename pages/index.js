@@ -19,16 +19,28 @@ export default function Home() {
   const total = items.reduce((s, x) => s + x.bid, 0);
   const sorted = [...items].sort((a, b) => b.bid - a.bid);
 
+  function looksLikeUrl(str) {
+    return /^https?:\/\//i.test(str.trim()) || /\.[a-z]{2,}(\/|$)/i.test(str.trim());
+  }
+
   async function fetchPreview() {
-    const link = addLink.trim();
-    if (!link) return;
+    const input = addLink.trim();
+    if (!input) return;
+
+    if (!looksLikeUrl(input)) {
+      // Treat as a plain handle/name — no fetch needed
+      setPreview({ title: input, thumbnail: null, isHandle: true });
+      return;
+    }
+
+    const url = /^https?:\/\//i.test(input) ? input : `https://${input}`;
     setLoadingPreview(true);
     try {
-      const res = await fetch(`/api/fetch-link-meta?url=${encodeURIComponent(link)}`);
+      const res = await fetch(`/api/fetch-link-meta?url=${encodeURIComponent(url)}`);
       const data = await res.json();
-      setPreview(data);
+      setPreview({ ...data, isHandle: false });
     } catch {
-      setPreview({ title: link, thumbnail: null });
+      setPreview({ title: input, thumbnail: null, isHandle: false });
     }
     setLoadingPreview(false);
   }
@@ -39,11 +51,13 @@ export default function Home() {
       alert('Paste a link, fetch the preview, and enter a bid above $0.');
       return;
     }
+    const trimmed = addLink.trim();
+    const isUrl = looksLikeUrl(trimmed);
     setItems(prev => [...prev, {
       id: nextId,
       name: preview.title,
       thumbnail: preview.thumbnail,
-      link: addLink.trim(),
+      link: isUrl ? (/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`) : null,
       bid,
     }]);
     setNextId(nextId + 1);
@@ -88,7 +102,11 @@ export default function Home() {
                   ) : '🔗'}
                 </div>
                 <div className="info">
-                  <a className="name" href={item.link} target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>{item.name}</a>
+                  {item.link ? (
+                    <a className="name" href={item.link} target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>{item.name}</a>
+                  ) : (
+                    <div className="name">{item.name}</div>
+                  )}
                   <div className="sub">Game</div>
                 </div>
                 <div className="bid-amt">${item.bid.toLocaleString()}</div>
@@ -104,14 +122,14 @@ export default function Home() {
         <div className="overlay open">
           <div className="modal">
             <h3>Add your game</h3>
-            <div className="sub-h">Paste any link — Steam, itch.io, or anywhere else. We'll pull the title and thumbnail.</div>
+            <div className="sub-h">Paste a link (Steam, itch.io, YouTube, anywhere) or just type a name/handle.</div>
             <div className="field">
-              <label>Game link</label>
+              <label>Link or handle</label>
               <input
                 value={addLink}
                 onChange={e => { setAddLink(e.target.value); setPreview(null); }}
                 onBlur={fetchPreview}
-                placeholder="https://store.steampowered.com/..."
+                placeholder="https://store.steampowered.com/... or @yourgame"
               />
             </div>
             {loadingPreview && <div className="note">Fetching preview…</div>}
