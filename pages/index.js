@@ -3,13 +3,13 @@ import Head from 'next/head';
 
 const initialState = {
   games: [
-    { id: 1, icon: '🕹️', name: 'Neon Drift', bid: 420, ownerId: 'seed' },
-    { id: 2, icon: '⚔️', name: 'Shadowmere', bid: 180, ownerId: 'seed' },
-    { id: 3, icon: '🧩', name: 'Puzzle Loop', bid: 40, ownerId: 'seed' },
+    { id: 1, name: 'Neon Drift', link: '#', thumbnail: null, bid: 420 },
+    { id: 2, name: 'Shadowmere', link: '#', thumbnail: null, bid: 180 },
+    { id: 3, name: 'Puzzle Loop', link: '#', thumbnail: null, bid: 40 },
   ],
   videos: [
-    { id: 4, icon: '📹', name: 'How I Built This in a Week', bid: 300, ownerId: 'seed' },
-    { id: 5, icon: '🎬', name: 'Ranking Every Boss Fight', bid: 95, ownerId: 'seed' },
+    { id: 4, name: 'How I Built This in a Week', link: '#', thumbnail: null, bid: 300 },
+    { id: 5, name: 'Ranking Every Boss Fight', link: '#', thumbnail: null, bid: 95 },
   ],
 };
 
@@ -17,6 +17,13 @@ export default function Home() {
   const [state, setState] = useState(initialState);
   const [nextId, setNextId] = useState(6);
   const [myId, setMyId] = useState(null);
+  const [addModal, setAddModal] = useState(null); // 'games' | 'videos' | null
+  const [bidModal, setBidModal] = useState(null); // { cat, id } | null
+  const [addLink, setAddLink] = useState('');
+  const [addBid, setAddBid] = useState('');
+  const [bidAmount, setBidAmount] = useState('');
+  const [preview, setPreview] = useState(null); // { title, thumbnail } | null
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   useEffect(() => {
     let id = window.localStorage.getItem('topspot_owner_id');
@@ -26,12 +33,6 @@ export default function Home() {
     }
     setMyId(id);
   }, []);
-  const [addModal, setAddModal] = useState(null); // 'games' | 'videos' | null
-  const [bidModal, setBidModal] = useState(null); // { cat, id } | null
-  const [addIcon, setAddIcon] = useState('');
-  const [addName, setAddName] = useState('');
-  const [addBid, setAddBid] = useState('');
-  const [bidAmount, setBidAmount] = useState('');
 
   const total = [...state.games, ...state.videos].reduce((s, x) => s + x.bid, 0);
 
@@ -39,21 +40,40 @@ export default function Home() {
     return [...state[cat]].sort((a, b) => b.bid - a.bid);
   }
 
+  async function fetchPreview() {
+    const link = addLink.trim();
+    if (!link) return;
+    setLoadingPreview(true);
+    try {
+      const res = await fetch(`/api/fetch-link-meta?url=${encodeURIComponent(link)}`);
+      const data = await res.json();
+      setPreview(data);
+    } catch {
+      setPreview({ title: link, thumbnail: null });
+    }
+    setLoadingPreview(false);
+  }
+
   function submitAdd() {
-    const name = addName.trim();
     const bid = parseFloat(addBid);
-    if (!name || !bid || bid <= 0) {
-      alert('Add a title and a bid amount above $0.');
+    if (!addLink.trim() || !preview || !bid || bid <= 0) {
+      alert('Paste a link, fetch the preview, and enter a bid above $0.');
       return;
     }
-    const icon = addIcon.trim() || '⭐';
     setState(prev => ({
       ...prev,
-      [addModal]: [...prev[addModal], { id: nextId, icon, name, bid, ownerId: myId }],
+      [addModal]: [...prev[addModal], {
+        id: nextId,
+        name: preview.title,
+        thumbnail: preview.thumbnail,
+        link: addLink.trim(),
+        bid,
+        ownerId: myId,
+      }],
     }));
     setNextId(nextId + 1);
     setAddModal(null);
-    setAddIcon(''); setAddName(''); setAddBid('');
+    setAddLink(''); setAddBid(''); setPreview(null);
   }
 
   function submitBid() {
@@ -123,21 +143,34 @@ export default function Home() {
         <div className="overlay open">
           <div className="modal">
             <h3>Add to the board</h3>
-            <div className="sub-h">Your starting bid sets your first rank.</div>
+            <div className="sub-h">Paste a link — we'll pull the title and thumbnail.</div>
             <div className="field">
-              <label>Icon (any emoji)</label>
-              <input value={addIcon} onChange={e => setAddIcon(e.target.value)} placeholder="🚀" maxLength={4} />
+              <label>Link (game page or YouTube video)</label>
+              <input
+                value={addLink}
+                onChange={e => { setAddLink(e.target.value); setPreview(null); }}
+                onBlur={fetchPreview}
+                placeholder="https://..."
+              />
             </div>
-            <div className="field">
-              <label>Title</label>
-              <input value={addName} onChange={e => setAddName(e.target.value)} placeholder="e.g. My Speedrun Video" />
-            </div>
+            {loadingPreview && <div className="note">Fetching preview…</div>}
+            {preview && (
+              <div className="field">
+                <label>Preview</label>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  {preview.thumbnail && (
+                    <img src={preview.thumbnail} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} />
+                  )}
+                  <div style={{ fontSize: 13 }}>{preview.title}</div>
+                </div>
+              </div>
+            )}
             <div className="field">
               <label>Starting bid ($)</label>
               <input type="number" value={addBid} onChange={e => setAddBid(e.target.value)} placeholder="10" min="1" />
             </div>
             <div className="modal-actions">
-              <button className="btn-ghost" onClick={() => setAddModal(null)}>Cancel</button>
+              <button className="btn-ghost" onClick={() => { setAddModal(null); setPreview(null); }}>Cancel</button>
               <button className="btn-primary" onClick={submitAdd}>Pay & post</button>
             </div>
             <div className="note">Checkout will run through Polar here — for now this adds it straight to the board.</div>
@@ -178,13 +211,17 @@ function Board({ title, className, items, catLabel, myId, onAdd, onBid }) {
         {items.map((item, i) => (
           <li className="entry" key={item.id}>
             <div className="rank">#{i + 1}</div>
-            <div className="thumb">{item.icon}</div>
+            <div className="thumb">
+              {item.thumbnail ? (
+                <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+              ) : '🔗'}
+            </div>
             <div className="info">
-              <div className="name">{item.name}</div>
+              <a className="name" href={item.link} target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>{item.name}</a>
               <div className="sub">{catLabel}</div>
             </div>
             <div className="bid-amt">${item.bid.toLocaleString()}</div>
-            {item.ownerId === myId && (
+            {item.ownerId && item.ownerId === myId && (
               <button className="bid-btn" onClick={() => onBid(item.id)}>Bid</button>
             )}
           </li>
